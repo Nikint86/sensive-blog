@@ -3,6 +3,23 @@ from django.urls import reverse
 from django.contrib.auth.models import User
 
 
+class PostQuerySet(models.QuerySet):
+
+    def year(self, year):
+        return self.filter(published_at__year=year).order_by('published_at')
+
+    def popular(self):
+        return self.annotate(
+            likes_count=models.Count('likes')
+        ).order_by('-likes_count')[:5]
+
+    def fresh(self):
+        return self.order_by('-published_at')[:5]
+
+    def with_author_and_tags(self):
+        return self.select_related('author').prefetch_related('tags')
+
+
 class Post(models.Model):
     title = models.CharField('Заголовок', max_length=200)
     text = models.TextField('Текст')
@@ -25,6 +42,8 @@ class Post(models.Model):
         related_name='posts',
         verbose_name='Теги')
 
+    objects = PostQuerySet.as_manager()
+
     def __str__(self):
         return self.title
 
@@ -37,8 +56,18 @@ class Post(models.Model):
         verbose_name_plural = 'посты'
 
 
+class TagQuerySet(models.QuerySet):
+
+    def popular(self):
+        return self.annotate(
+            posts_count=models.Count('posts')
+        ).order_by('-posts_count')[:5]
+
+
 class Tag(models.Model):
     title = models.CharField('Тег', max_length=20, unique=True)
+
+    objects = TagQuerySet.as_manager()
 
     def __str__(self):
         return self.title
@@ -59,11 +88,14 @@ class Comment(models.Model):
     post = models.ForeignKey(
         'Post',
         on_delete=models.CASCADE,
-        verbose_name='Пост, к которому написан', related_name='comments')
+        verbose_name='Пост, к которому написан',
+        related_name='comments'
+    )
     author = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        verbose_name='Автор')
+        verbose_name='Автор'
+    )
 
     text = models.TextField('Текст комментария')
     published_at = models.DateTimeField('Дата и время публикации')
