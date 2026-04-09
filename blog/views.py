@@ -38,15 +38,28 @@ def index(request):
     comments_counts = Comment.objects.filter(post_id__in=post_ids).values('post_id').annotate(
         count=Count('id')
     )
-
     comments_dict = {item['post_id']: item['count'] for item in comments_counts}
 
     for post in all_posts:
         post.comments_count = comments_dict.get(post.id, 0)
 
-    most_popular_tags = Tag.objects.annotate(
+    most_popular_tags = list(Tag.objects.annotate(
         posts_count=Count('posts')
-    ).order_by('-posts_count')[:5]
+    ).order_by('-posts_count')[:5])
+
+    all_tags = set()
+    for post in all_posts:
+        for tag in post.tags.all():
+            all_tags.add(tag.id)
+
+    if all_tags:
+        tags_with_counts = Tag.objects.filter(id__in=all_tags).annotate(posts_count=Count('posts'))
+        tags_count_dict = {tag.id: tag.posts_count for tag in tags_with_counts}
+
+        for post in all_posts:
+            for tag in post.tags.all():
+                if tag.id in tags_count_dict:
+                    tag.posts_count = tags_count_dict[tag.id]
 
     context = {
         'most_popular_posts': [
@@ -87,9 +100,9 @@ def post_detail(request, slug):
         'tags': [serialize_tag(tag) for tag in related_tags],
     }
 
-    most_popular_tags = Tag.objects.annotate(
+    most_popular_tags = list(Tag.objects.annotate(
         posts_count=Count('posts')
-    ).order_by('-posts_count')[:5]
+    ).order_by('-posts_count')[:5])
 
     most_popular_posts = list(Post.objects.annotate(
         likes_count=Count('likes')
@@ -103,6 +116,19 @@ def post_detail(request, slug):
         comments_dict = {item['post_id']: item['count'] for item in comments_counts}
         for post in most_popular_posts:
             post.comments_count = comments_dict.get(post.id, 0)
+
+        all_tags = set()
+        for post in most_popular_posts:
+            for tag in post.tags.all():
+                all_tags.add(tag.id)
+
+        if all_tags:
+            tags_with_counts = Tag.objects.filter(id__in=all_tags).annotate(posts_count=Count('posts'))
+            tags_count_dict = {tag.id: tag.posts_count for tag in tags_with_counts}
+            for post in most_popular_posts:
+                for tag in post.tags.all():
+                    if tag.id in tags_count_dict:
+                        tag.posts_count = tags_count_dict[tag.id]
 
     context = {
         'post': serialized_post,
@@ -117,9 +143,9 @@ def post_detail(request, slug):
 def tag_filter(request, tag_title):
     tag = Tag.objects.get(title=tag_title)
 
-    most_popular_tags = Tag.objects.annotate(
+    most_popular_tags = list(Tag.objects.annotate(
         posts_count=Count('posts')
-    ).order_by('-posts_count')[:5]
+    ).order_by('-posts_count')[:5])
 
     most_popular_posts = list(Post.objects.annotate(
         likes_count=Count('likes')
@@ -133,6 +159,19 @@ def tag_filter(request, tag_title):
         comments_dict = {item['post_id']: item['count'] for item in comments_counts}
         for post in most_popular_posts:
             post.comments_count = comments_dict.get(post.id, 0)
+
+        all_tags = set()
+        for post in most_popular_posts:
+            for tag in post.tags.all():
+                all_tags.add(tag.id)
+
+        if all_tags:
+            tags_with_counts = Tag.objects.filter(id__in=all_tags).annotate(posts_count=Count('posts'))
+            tags_count_dict = {tag.id: tag.posts_count for tag in tags_with_counts}
+            for post in most_popular_posts:
+                for tag in post.tags.all():
+                    if tag.id in tags_count_dict:
+                        tag.posts_count = tags_count_dict[tag.id]
 
     related_posts = tag.posts.all()[:20]
 
