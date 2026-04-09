@@ -88,6 +88,13 @@ def post_detail(request, slug):
 
     related_tags = post.tags.all()
 
+    if related_tags:
+        tag_ids = [tag.id for tag in related_tags]
+        tags_with_counts = Tag.objects.filter(id__in=tag_ids).annotate(posts_count=Count('posts'))
+        tags_count_dict = {tag.id: tag.posts_count for tag in tags_with_counts}
+        for tag in related_tags:
+            tag.posts_count = tags_count_dict.get(tag.id, 0)
+
     serialized_post = {
         'title': post.title,
         'text': post.text,
@@ -109,7 +116,7 @@ def post_detail(request, slug):
     ).select_related('author').prefetch_related('tags').order_by('-likes_count')[:5])
 
     if most_popular_posts:
-        post_ids = [post.id for post in most_popular_posts]
+        post_ids = [p.id for p in most_popular_posts]
         comments_counts = Comment.objects.filter(post_id__in=post_ids).values('post_id').annotate(
             count=Count('id')
         )
