@@ -75,7 +75,7 @@ def index(request):
 
 def post_detail(request, slug):
     post = Post.objects.get(slug=slug)
-    comments = post.comments.all()
+    comments = Comment.objects.filter(post=post).select_related('author')
     serialized_comments = []
     for comment in comments:
         serialized_comments.append({
@@ -114,19 +114,19 @@ def post_detail(request, slug):
             count=Count('id')
         )
         comments_dict = {item['post_id']: item['count'] for item in comments_counts}
-        for post in most_popular_posts:
-            post.comments_count = comments_dict.get(post.id, 0)
+        for p in most_popular_posts:
+            p.comments_count = comments_dict.get(p.id, 0)
 
         all_tags = set()
-        for post in most_popular_posts:
-            for tag in post.tags.all():
+        for p in most_popular_posts:
+            for tag in p.tags.all():
                 all_tags.add(tag.id)
 
         if all_tags:
             tags_with_counts = Tag.objects.filter(id__in=all_tags).annotate(posts_count=Count('posts'))
             tags_count_dict = {tag.id: tag.posts_count for tag in tags_with_counts}
-            for post in most_popular_posts:
-                for tag in post.tags.all():
+            for p in most_popular_posts:
+                for tag in p.tags.all():
                     if tag.id in tags_count_dict:
                         tag.posts_count = tags_count_dict[tag.id]
 
@@ -134,7 +134,7 @@ def post_detail(request, slug):
         'post': serialized_post,
         'popular_tags': [serialize_tag(tag) for tag in most_popular_tags],
         'most_popular_posts': [
-            serialize_post(post) for post in most_popular_posts
+            serialize_post(p) for p in most_popular_posts
         ],
     }
     return render(request, 'post-details.html', context)
