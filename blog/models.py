@@ -19,6 +19,31 @@ class PostQuerySet(models.QuerySet):
     def with_author_and_tags(self):
         return self.select_related('author').prefetch_related('tags')
 
+    def fetch_with_comments_count(self):
+        post_ids = [post.id for post in self]
+
+        comments_count = models.Count('id')
+        comments_data = Comment.objects.filter(
+            post_id__in=post_ids
+        ).values('post_id').annotate(
+            count=comments_count
+        )
+
+        comments_dict = {item['post_id']: item['count'] for item in comments_data}
+
+        for post in self:
+            post.comments_count = comments_dict.get(post.id, 0)
+
+        return self
+
+
+class TagQuerySet(models.QuerySet):
+
+    def popular(self):
+        return self.annotate(
+            posts_count=models.Count('posts')
+        ).order_by('-posts_count')[:5]
+
 
 class Post(models.Model):
     title = models.CharField('Заголовок', max_length=200)
