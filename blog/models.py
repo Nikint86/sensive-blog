@@ -29,10 +29,10 @@ class PostQuerySet(models.QuerySet):
             count=comments_count
         )
 
-        comments_dict = {item['post_id']: item['count'] for item in comments_data}
+        comments_by_post = {item['post_id']: item['count'] for item in comments_data}
 
         for post in self:
-            post.comments_count = comments_dict.get(post.id, 0)
+            post.comments_count = comments_by_post.get(post.id, 0)
 
         return self
 
