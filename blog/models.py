@@ -22,11 +22,13 @@ class PostQuerySet(models.QuerySet):
     def fetch_with_comments_count(self):
         post_ids = [post.id for post in self]
 
-        comments_count = models.Count('id')
+        if not post_ids:
+            return self
+
         comments_data = Comment.objects.filter(
             post_id__in=post_ids
         ).values('post_id').annotate(
-            count=comments_count
+            count=models.Count('id')
         )
 
         comments_by_post = {item['post_id']: item['count'] for item in comments_data}
@@ -36,6 +38,12 @@ class PostQuerySet(models.QuerySet):
 
         return self
 
+    def popular_with_comments(self):
+        return self.popular().with_author_and_tags().fetch_with_comments_count()
+
+    def fresh_with_comments(self):
+        return self.fresh().with_author_and_tags().fetch_with_comments_count()
+
 
 class TagQuerySet(models.QuerySet):
 
@@ -43,6 +51,20 @@ class TagQuerySet(models.QuerySet):
         return self.annotate(
             posts_count=models.Count('posts')
         ).order_by('-posts_count')[:5]
+
+    def with_posts_count(self):
+        tag_ids = [tag.id for tag in self]
+
+        if not tag_ids:
+            return self
+
+        tags_data = self.filter(id__in=tag_ids).annotate(posts_count=models.Count('posts'))
+        posts_count_by_tag = {tag.id: tag.posts_count for tag in tags_data}
+
+        for tag in self:
+            tag.posts_count = posts_count_by_tag.get(tag.id, 0)
+
+        return self
 
 
 class Post(models.Model):
@@ -79,14 +101,6 @@ class Post(models.Model):
         ordering = ['-published_at']
         verbose_name = 'пост'
         verbose_name_plural = 'посты'
-
-
-class TagQuerySet(models.QuerySet):
-
-    def popular(self):
-        return self.annotate(
-            posts_count=models.Count('posts')
-        ).order_by('-posts_count')[:5]
 
 
 class Tag(models.Model):
