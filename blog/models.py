@@ -19,7 +19,7 @@ class PostQuerySet(models.QuerySet):
     def with_author_and_tags(self):
         return self.select_related('author').prefetch_related('tags')
 
-    def fetch_with_comments_count(self):
+    def with_comments_count(self):
         post_ids = [post.id for post in self]
 
         if not post_ids:
@@ -39,10 +39,12 @@ class PostQuerySet(models.QuerySet):
         return self
 
     def popular_with_comments(self):
-        return self.popular().with_author_and_tags().fetch_with_comments_count()
+        posts = self.popular().with_author_and_tags()
+        return posts.with_comments_count()
 
     def fresh_with_comments(self):
-        return self.fresh().with_author_and_tags().fetch_with_comments_count()
+        posts = self.fresh().with_author_and_tags()
+        return posts.with_comments_count()
 
 
 class TagQuerySet(models.QuerySet):
