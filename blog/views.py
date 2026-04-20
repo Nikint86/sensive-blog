@@ -4,6 +4,8 @@ from django.db.models import Count
 
 
 def serialize_post(post):
+    tags_to_use = getattr(post, 'prefetched_tags', post.tags.all())
+
     return {
         'title': post.title,
         'teaser_text': post.text[:200],
@@ -12,8 +14,8 @@ def serialize_post(post):
         'image_url': post.image.url if post.image else None,
         'published_at': post.published_at,
         'slug': post.slug,
-        'tags': [serialize_tag(tag) for tag in post.tags.all()],
-        'first_tag_title': post.tags.all()[0].title if post.tags.exists() else None,
+        'tags': [serialize_tag(tag) for tag in tags_to_use],
+        'first_tag_title': tags_to_use[0].title if tags_to_use else None,
     }
 
 
@@ -50,13 +52,8 @@ def post_detail(request, slug):
         for comment in comments
     ]
 
-    related_tags = list(post.tags.all())
-    if related_tags:
-        tag_ids = [tag.id for tag in related_tags]
-        tags_data = Tag.objects.filter(id__in=tag_ids).annotate(posts_count=Count('posts'))
-        posts_count_by_tag = {tag.id: tag.posts_count for tag in tags_data}
-        for tag in related_tags:
-            tag.posts_count = posts_count_by_tag.get(tag.id, 0)
+    tags_with_count = Tag.objects.annotate(posts_count=Count('posts'))
+    related_tags = list(tags_with_count.filter(posts=post))
 
     serialized_post = {
         'title': post.title,
@@ -82,7 +79,7 @@ def post_detail(request, slug):
 
 
 def tag_filter(request, tag_title):
-    tag = get_object_or_404(Tag, title=tag_title)
+    tag = get_object_or_404(Tag.objects.annotate(posts_count=Count('posts')), title=tag_title)
 
     most_popular_tags = list(Tag.objects.popular())
     most_popular_posts = list(Post.objects.popular_with_comments())
@@ -90,7 +87,7 @@ def tag_filter(request, tag_title):
     related_posts = list(
         tag.posts.all()[:20]
         .select_related('author')
-        .prefetch_related('tags')
+        .with_tags_and_posts_count()
     )
 
     if related_posts:
@@ -101,19 +98,6 @@ def tag_filter(request, tag_title):
         comments_by_post = {item['post_id']: item['count'] for item in comments_data}
         for post in related_posts:
             post.comments_count = comments_by_post.get(post.id, 0)
-
-        all_tags = set()
-        for post in related_posts:
-            for tag_obj in post.tags.all():
-                all_tags.add(tag_obj.id)
-
-        if all_tags:
-            tags_data = Tag.objects.filter(id__in=all_tags).annotate(posts_count=Count('posts'))
-            posts_count_by_tag = {tag.id: tag.posts_count for tag in tags_data}
-            for post in related_posts:
-                for tag_obj in post.tags.all():
-                    if tag_obj.id in posts_count_by_tag:
-                        tag_obj.posts_count = posts_count_by_tag[tag_obj.id]
 
     context = {
         'tag': tag.title,
