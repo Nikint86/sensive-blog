@@ -1,6 +1,7 @@
 from django.db import models
 from django.urls import reverse
 from django.contrib.auth.models import User
+from django.db.models import Prefetch, Count
 
 
 class PostQuerySet(models.QuerySet):
@@ -10,7 +11,7 @@ class PostQuerySet(models.QuerySet):
 
     def popular(self):
         return self.annotate(
-            likes_count=models.Count('likes')
+            likes_count=Count('likes')
         ).order_by('-likes_count')[:5]
 
     def fresh(self):
@@ -18,6 +19,15 @@ class PostQuerySet(models.QuerySet):
 
     def with_author_and_tags(self):
         return self.select_related('author').prefetch_related('tags')
+
+    def with_tags_and_posts_count(self):
+        tags_with_count = Tag.objects.annotate(
+            posts_count=Count('posts')
+        )
+
+        return self.prefetch_related(
+            Prefetch('tags', queryset=tags_with_count, to_attr='prefetched_tags')
+        )
 
     def with_comments_count(self):
         post_ids = [post.id for post in self]
@@ -28,7 +38,7 @@ class PostQuerySet(models.QuerySet):
         comments_data = Comment.objects.filter(
             post_id__in=post_ids
         ).values('post_id').annotate(
-            count=models.Count('id')
+            count=Count('id')
         )
 
         comments_by_post = {item['post_id']: item['count'] for item in comments_data}
@@ -39,11 +49,11 @@ class PostQuerySet(models.QuerySet):
         return self
 
     def popular_with_comments(self):
-        posts = self.popular().with_author_and_tags()
+        posts = self.popular().with_author_and_tags().with_tags_and_posts_count()
         return posts.with_comments_count()
 
     def fresh_with_comments(self):
-        posts = self.fresh().with_author_and_tags()
+        posts = self.fresh().with_author_and_tags().with_tags_and_posts_count()
         return posts.with_comments_count()
 
 
@@ -51,22 +61,8 @@ class TagQuerySet(models.QuerySet):
 
     def popular(self):
         return self.annotate(
-            posts_count=models.Count('posts')
+            posts_count=Count('posts')
         ).order_by('-posts_count')[:5]
-
-    def with_posts_count(self):
-        tag_ids = [tag.id for tag in self]
-
-        if not tag_ids:
-            return self
-
-        tags_data = self.filter(id__in=tag_ids).annotate(posts_count=models.Count('posts'))
-        posts_count_by_tag = {tag.id: tag.posts_count for tag in tags_data}
-
-        for tag in self:
-            tag.posts_count = posts_count_by_tag.get(tag.id, 0)
-
-        return self
 
 
 class Post(models.Model):
